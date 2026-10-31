@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -87,5 +88,41 @@ func TestMigrateLegacyDatabase(t *testing.T) {
 	}
 	if got.ForfeitedBy != game.NoWinner {
 		t.Errorf("ForfeitedBy = %d after migration, want %d", got.ForfeitedBy, game.NoWinner)
+	}
+}
+
+func TestMigrateFeedbackModes(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "modes.db")
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for code, mode := range map[string]string{"POS1": "positional", "WRD1": "wordle"} {
+		st := game.DefaultSettings()
+		st.Feedback = game.Feedback(mode)
+		if err := s.Save(ctx, game.New(code, st, &game.Player{Token: code}, 0, time.UnixMilli(1))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Pretend the last migration hasn't run yet.
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, len(migrations)-1)); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	s, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	for code, want := range map[string]game.Feedback{"POS1": game.Classic, "WRD1": game.Pinpoint} {
+		g, err := s.Load(ctx, code)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if g.Settings.Feedback != want {
+			t.Errorf("%s feedback = %q, want %q", code, g.Settings.Feedback, want)
+		}
 	}
 }

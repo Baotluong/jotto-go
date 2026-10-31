@@ -32,7 +32,7 @@ func (s Settings) Validate() error {
 		return errors.New("difficulty must be 1, 2, or 3")
 	}
 	if !s.Feedback.Valid() {
-		return errors.New("feedback must be classic, positional, or wordle")
+		return errors.New("feedback must be classic or pinpoint")
 	}
 	return nil
 }

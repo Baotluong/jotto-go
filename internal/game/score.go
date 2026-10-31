@@ -6,18 +6,15 @@ type Feedback string
 const (
 	// Classic is true Jotto: only the number of letters in common.
 	Classic Feedback = "classic"
-	// Positional adds how many of those letters are in the right spot,
-	// without saying which (Mastermind-style).
-	Positional Feedback = "positional"
-	// Wordle marks every letter as hit, present, or miss.
-	Wordle Feedback = "wordle"
+	// Pinpoint marks every letter: right spot, wrong spot, or not in the word.
+	Pinpoint Feedback = "pinpoint"
 )
 
 func (f Feedback) Valid() bool {
-	return f == Classic || f == Positional || f == Wordle
+	return f == Classic || f == Pinpoint
 }
 
-// Mark is per-letter Wordle feedback.
+// Mark is per-letter feedback in Pinpoint mode.
 type Mark string
 
 const (
@@ -26,12 +23,10 @@ const (
 	Miss    Mark = "miss"
 )
 
-// Result is the feedback for one guess. Only the fields for the game's
-// Feedback mode are populated.
+// Result is the feedback for one guess. Marks is set only in Pinpoint mode.
 type Result struct {
-	Common int    `json:"common"`          // letters in common (all modes)
-	Exact  int    `json:"exact,omitempty"` // Positional and Wordle
-	Marks  []Mark `json:"marks,omitempty"` // Wordle only
+	Common int    `json:"common"` // letters in common
+	Marks  []Mark `json:"marks,omitempty"`
 	Solved bool   `json:"solved"`
 }
 
@@ -42,15 +37,8 @@ func Score(guess, secret string, mode Feedback) Result {
 		Common: CommonLetters(guess, secret),
 		Solved: guess == secret,
 	}
-	if mode == Positional || mode == Wordle {
-		for i := range len(guess) {
-			if guess[i] == secret[i] {
-				r.Exact++
-			}
-		}
-	}
-	if mode == Wordle {
-		r.Marks = WordleMarks(guess, secret)
+	if mode == Pinpoint {
+		r.Marks = PinpointMarks(guess, secret)
 	}
 	return r
 }
@@ -72,9 +60,9 @@ func CommonLetters(a, b string) int {
 	return n
 }
 
-// WordleMarks applies Wordle's rules: exact matches first, then remaining
-// letters are marked present left to right while unmatched copies remain.
-func WordleMarks(guess, secret string) []Mark {
+// PinpointMarks marks exact matches first, then marks remaining letters present
+// left to right while unmatched copies remain in the secret.
+func PinpointMarks(guess, secret string) []Mark {
 	marks := make([]Mark, len(guess))
 	var left [26]int
 	for i := range len(guess) {

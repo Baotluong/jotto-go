@@ -25,6 +25,11 @@ var schema string
 var migrations = []string{
 	schema,
 	`ALTER TABLE games ADD COLUMN forfeited_by INTEGER NOT NULL DEFAULT -1`,
+	// Feedback modes were reduced to two: "positional" games continue as
+	// classic, and "wordle" was renamed "pinpoint".
+	`UPDATE games SET settings = json_set(settings, '$.feedback',
+		CASE json_extract(settings, '$.feedback') WHEN 'wordle' THEN 'pinpoint' ELSE 'classic' END)
+	 WHERE json_extract(settings, '$.feedback') IN ('positional', 'wordle')`,
 }
 
 var ErrNotFound = errors.New("game not found")

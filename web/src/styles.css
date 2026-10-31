@@ -362,11 +362,7 @@ button.primary {
   justify-content: flex-end;
 }
 
-/* Score badges: letters in common, plus (in positional mode) letters in place. */
-.score {
-  display: inline-flex;
-  gap: 6px;
-}
+/* Letters-in-common count next to each Jotto guess. */
 .badge {
   min-width: 28px;
   height: 28px;
@@ -375,27 +371,8 @@ button.primary {
   place-items: center;
   border-radius: 999px;
   background: var(--border);
-  border: 1px solid var(--border);
   font-weight: 800;
   font-size: 0.95rem;
-}
-.badge.exact {
-  background: var(--hit);
-  border-color: var(--hit);
-  color: #fff;
-}
-.legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.legend .badge {
-  min-width: 20px;
-  height: 20px;
-  font-size: 0.7rem;
-}
-.legend .badge.exact {
-  margin-left: 8px;
 }
 
 .forfeit {

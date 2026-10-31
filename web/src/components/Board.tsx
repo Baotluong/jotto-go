@@ -57,14 +57,14 @@ export function Board({ state, error, send }: Props) {
       <div className="columns">
         <section className="card">
           <h3>Your guesses</h3>
-          <GuessList guesses={mine} length={n} positional={state.settings.feedback === "positional"} />
+          <GuessList guesses={mine} length={n} />
         </section>
         <section className="card">
           <h3>
             {opponent.name}'s guesses
             {!opponent.connected && <span className="muted small"> (offline)</span>}
           </h3>
-          <GuessList guesses={theirs} length={n} positional={state.settings.feedback === "positional"} />
+          <GuessList guesses={theirs} length={n} />
           <p className="muted small">
             Your word: <strong className="secret">{state.yourSecret.toUpperCase()}</strong>
           </p>
@@ -122,15 +122,10 @@ function Status({ state }: { state: GameState }) {
   return <p className={`status ${tone}`}>{text}</p>;
 }
 
-function GuessList({ guesses, length, positional }: { guesses: Guess[]; length: number; positional: boolean }) {
+function GuessList({ guesses, length }: { guesses: Guess[]; length: number }) {
   if (guesses.length === 0) return <p className="muted small">No guesses yet.</p>;
   return (
     <ol className="guesses">
-      {positional && (
-        <li className="legend muted small">
-          <span className="badge">#</span> letters <span className="badge exact">#</span> in place
-        </li>
-      )}
       {guesses.map((g, i) => (
         <li key={i}>
           <Tiles guess={g} length={length} />
@@ -159,15 +154,8 @@ function Score({ guess }: { guess: Guess }) {
   if (r.solved) return <span className="score solved">✓</span>;
   if (r.marks) return null; // tiles already say everything
   return (
-    <span className="score">
-      <span className="badge" title={`${r.common} letters in common`}>
-        {r.common}
-      </span>
-      {r.exact !== undefined && (
-        <span className="badge exact" title={`${r.exact} in the right spot`}>
-          {r.exact}
-        </span>
-      )}
+    <span className="badge" title={`${r.common} letters in common`}>
+      {r.common}
     </span>
   );
 }

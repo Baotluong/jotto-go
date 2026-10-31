@@ -1,7 +1,7 @@
 import type { Settings } from "../api";
 
 const difficulty = { 1: "Easy", 2: "Medium", 3: "Hard" };
-const feedback = { classic: "Jotto", positional: "Jotto + positions", wordle: "Wordle" };
+const feedback = { classic: "Jotto", pinpoint: "Pinpoint" };
 
 export function SettingsSummary({ settings: s }: { settings: Settings }) {
   const parts = [

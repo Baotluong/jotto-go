@@ -4,8 +4,7 @@ import { navigate } from "../App";
 
 const feedbackHelp: Record<Settings["feedback"], string> = {
   classic: "Only how many letters you got. True Jotto.",
-  positional: "Letters in common, plus how many are in the right spot.",
-  wordle: "Every letter marked: right spot, wrong spot, or not in the word.",
+  pinpoint: "Every letter marked: right spot, wrong spot, or not in the word. Easier.",
 };
 
 export function Home() {
@@ -92,9 +91,9 @@ export function Home() {
         <fieldset className="field">
           <legend>Feedback</legend>
           <div className="segmented">
-            {(["classic", "positional", "wordle"] as const).map((f) => (
+            {(["classic", "pinpoint"] as const).map((f) => (
               <button type="button" key={f} aria-pressed={settings.feedback === f} onClick={() => set("feedback", f)}>
-                {f === "classic" ? "Jotto" : f === "positional" ? "+ Positions" : "Wordle"}
+                {f === "classic" ? "Jotto" : "Pinpoint"}
               </button>
             ))}
           </div>

@@ -19,7 +19,7 @@ This version adds real-time online multiplayer with a Go backend.
 | --- | --- | --- |
 | Word length | 4, 5, 6 | 5 |
 | Difficulty | Easy, Medium, Hard | Medium |
-| Feedback | **Jotto** (letters in common), **+ Positions** (also how many are in the right spot), **Wordle** (every letter marked) | Jotto |
+| Feedback | **Jotto** (only the number of letters in common) or **Pinpoint** (every letter marked: right spot, wrong spot, or not in the word) | Jotto |
 | No repeated letters | on / off (applies to secret words) | on |
 | Pick secrets for us | on / off | off |
 

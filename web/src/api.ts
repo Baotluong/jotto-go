@@ -1,6 +1,6 @@
 // Types mirror the Go JSON in internal/game and internal/hub.
 
-export type Feedback = "classic" | "positional" | "wordle";
+export type Feedback = "classic" | "pinpoint";
 export type Difficulty = 1 | 2 | 3;
 export type Phase = "waiting" | "choosing" | "playing" | "finished";
 export type Mark = "hit" | "present" | "miss";
@@ -23,7 +23,6 @@ export const defaultSettings: Settings = {
 
 export interface Result {
   common: number;
-  exact?: number;
   marks?: Mark[];
   solved: boolean;
 }
