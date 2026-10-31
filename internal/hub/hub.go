@@ -177,7 +177,7 @@ func (h *Hub) Detach(c *Client) {
 
 // Message is what clients send over the WebSocket.
 type Message struct {
-	Type string `json:"type"` // "secret" or "guess"
+	Type string `json:"type"` // "secret", "guess", or "forfeit"
 	Word string `json:"word"` // for "secret", empty means pick one for me
 }
 
@@ -194,6 +194,10 @@ func (h *Hub) Handle(ctx context.Context, c *Client, m Message) error {
 		return h.mutateRoom(ctx, c.room, func(g *game.Game, now time.Time) error {
 			_, err := g.MakeGuess(c.seat, word, h.dict, now)
 			return err
+		})
+	case "forfeit":
+		return h.mutateRoom(ctx, c.room, func(g *game.Game, now time.Time) error {
+			return g.Forfeit(c.seat, now)
 		})
 	default:
 		return UserError{errors.New("unknown message type")}

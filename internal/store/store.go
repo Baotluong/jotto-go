@@ -19,6 +19,14 @@ import (
 //go:embed schema.sql
 var schema string
 
+// migrations run in order; PRAGMA user_version records how many have been
+// applied. Append new ones, never edit old ones. The first is idempotent so
+// databases created before versioning existed upgrade cleanly.
+var migrations = []string{
+	schema,
+	`ALTER TABLE games ADD COLUMN forfeited_by INTEGER NOT NULL DEFAULT -1`,
+}
+
 var ErrNotFound = errors.New("game not found")
 
 type Store struct{ db *sql.DB }
@@ -33,11 +41,37 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	// SQLite allows one writer at a time; a single connection avoids
 	// SQLITE_BUSY churn and is plenty for this workload.
 	db.SetMaxOpenConns(1)
-	if _, err := db.ExecContext(ctx, schema); err != nil {
+	if err := migrate(ctx, db); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, err
 	}
 	return &Store{db: db}, nil
+}
+
+func migrate(ctx context.Context, db *sql.DB) error {
+	var version int
+	if err := db.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	for i := version; i < len(migrations); i++ {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("migration %d: %w", i+1, err)
+		}
+		// PRAGMA doesn't take bind parameters; i is an int we control.
+		if _, err := tx.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -58,13 +92,14 @@ func (s *Store) Save(ctx context.Context, g *game.Game) error {
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO games (code, settings, phase, first_seat, turn, solved0, solved1, winner, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO games (code, settings, phase, first_seat, turn, solved0, solved1, winner, forfeited_by, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (code) DO UPDATE SET
 			phase = excluded.phase, turn = excluded.turn,
 			solved0 = excluded.solved0, solved1 = excluded.solved1,
-			winner = excluded.winner, updated_at = excluded.updated_at`,
-		g.Code, settings, g.Phase, g.First, g.Turn, g.SolvedBy[0], g.SolvedBy[1], g.Winner,
+			winner = excluded.winner, forfeited_by = excluded.forfeited_by,
+			updated_at = excluded.updated_at`,
+		g.Code, settings, g.Phase, g.First, g.Turn, g.SolvedBy[0], g.SolvedBy[1], g.Winner, g.ForfeitedBy,
 		g.Created.UnixMilli(), g.Updated.UnixMilli())
 	if err != nil {
 		return err
@@ -103,9 +138,9 @@ func (s *Store) Load(ctx context.Context, code string) (*game.Game, error) {
 	var settings []byte
 	var created, updated int64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT settings, phase, first_seat, turn, solved0, solved1, winner, created_at, updated_at
+		SELECT settings, phase, first_seat, turn, solved0, solved1, winner, forfeited_by, created_at, updated_at
 		FROM games WHERE code = ?`, code).
-		Scan(&settings, &g.Phase, &g.First, &g.Turn, &g.SolvedBy[0], &g.SolvedBy[1], &g.Winner, &created, &updated)
+		Scan(&settings, &g.Phase, &g.First, &g.Turn, &g.SolvedBy[0], &g.SolvedBy[1], &g.Winner, &g.ForfeitedBy, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}

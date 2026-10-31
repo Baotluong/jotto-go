@@ -181,3 +181,23 @@ func TestSPAFallback(t *testing.T) {
 		t.Errorf("SPA fallback: %d %s", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 }
+
+func TestForfeitAndErrorText(t *testing.T) {
+	ts := newTestServer(t)
+	_, a := postJSON(t, ts.URL+"/api/games", map[string]any{})
+	_, b := postJSON(t, ts.URL+"/api/games/"+a.Code+"/join", map[string]any{})
+	pa, pb := connect(t, ts, a), connect(t, ts, b)
+
+	// Errors reach players as sentences.
+	pa.send("guess", "crane")
+	if m := pa.waitFor(func(m serverMsg) bool { return m.Type == "error" }); m.Error != "That can't be done right now" {
+		t.Errorf("error text = %q", m.Error)
+	}
+
+	// Forfeiting while secrets are still being chosen ends the game.
+	pa.send("forfeit", "")
+	s := pb.waitFor(func(m serverMsg) bool { return m.State.Phase == game.Finished }).State
+	if s.Winner != 1 || s.ForfeitedBy != 0 {
+		t.Errorf("winner %d forfeitedBy %d", s.Winner, s.ForfeitedBy)
+	}
+}

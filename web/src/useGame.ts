@@ -77,7 +77,7 @@ export function useGame(code: string, token: string) {
     };
   }, [code, token]);
 
-  const send = useCallback((type: "secret" | "guess", word: string) => {
+  const send = useCallback((type: "secret" | "guess" | "forfeit", word = "") => {
     setError(null);
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({ type, word }));

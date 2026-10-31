@@ -140,3 +140,34 @@ func TestNoGuessAfterFinish(t *testing.T) {
 		t.Errorf("guess after finish: %v", err)
 	}
 }
+
+func TestRepeatGuessRejected(t *testing.T) {
+	g := newPlaying(t, "crane", "house")
+	mustGuess(t, g, 0, "slate")
+	mustGuess(t, g, 1, "slate") // the opponent may guess the same word
+	if _, err := g.MakeGuess(0, "slate", fakeDict{}, now); !errors.Is(err, ErrAlreadyGuessed) {
+		t.Errorf("repeat guess: %v", err)
+	}
+	if g.Turn != 0 || len(g.Guesses) != 2 {
+		t.Errorf("rejected guess changed state: turn %d, %d guesses", g.Turn, len(g.Guesses))
+	}
+}
+
+func TestForfeit(t *testing.T) {
+	g := New("ABCD", DefaultSettings(), &Player{}, 0, now)
+	if err := g.Forfeit(0, now); !errors.Is(err, ErrWrongPhase) {
+		t.Errorf("forfeit before opponent joined: %v", err)
+	}
+
+	g = newPlaying(t, "crane", "house")
+	mustGuess(t, g, 0, "slate")
+	if err := g.Forfeit(0, now); err != nil {
+		t.Fatal(err)
+	}
+	if g.Phase != Finished || g.Winner != 1 || g.ForfeitedBy != 0 {
+		t.Errorf("phase %s winner %d forfeitedBy %d", g.Phase, g.Winner, g.ForfeitedBy)
+	}
+	if err := g.Forfeit(1, now); !errors.Is(err, ErrWrongPhase) {
+		t.Errorf("forfeit after finish: %v", err)
+	}
+}

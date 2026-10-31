@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { navigate } from "../App";
 import type { GameState, Guess } from "../api";
+import { ForfeitButton } from "./ForfeitButton";
 import { LetterBoard } from "./LetterBoard";
 
 interface Props {
   state: GameState;
   error: string | null;
-  send: (type: "guess", word: string) => void;
+  send: (type: "guess" | "forfeit", word?: string) => void;
 }
 
 export function Board({ state, error, send }: Props) {
@@ -19,6 +20,10 @@ export function Board({ state, error, send }: Props) {
   const mine = state.guesses.filter((g) => g.seat === me);
   const theirs = state.guesses.filter((g) => g.seat === them);
 
+  // Clear the input only once a guess is accepted, so a rejected one
+  // (typo, repeat) can be fixed instead of retyped.
+  useEffect(() => setWord(""), [mine.length]);
+
   return (
     <div className="stack">
       <Status state={state} />
@@ -29,7 +34,6 @@ export function Board({ state, error, send }: Props) {
           onSubmit={(e) => {
             e.preventDefault();
             send("guess", word);
-            setWord("");
           }}
         >
           <input
@@ -53,14 +57,14 @@ export function Board({ state, error, send }: Props) {
       <div className="columns">
         <section className="card">
           <h3>Your guesses</h3>
-          <GuessList guesses={mine} length={n} />
+          <GuessList guesses={mine} length={n} positional={state.settings.feedback === "positional"} />
         </section>
         <section className="card">
           <h3>
             {opponent.name}'s guesses
             {!opponent.connected && <span className="muted small"> (offline)</span>}
           </h3>
-          <GuessList guesses={theirs} length={n} />
+          <GuessList guesses={theirs} length={n} positional={state.settings.feedback === "positional"} />
           <p className="muted small">
             Your word: <strong className="secret">{state.yourSecret.toUpperCase()}</strong>
           </p>
@@ -69,6 +73,11 @@ export function Board({ state, error, send }: Props) {
 
       <LetterBoard code={state.code} />
 
+      {state.phase === "playing" && (
+        <div className="row end">
+          <ForfeitButton onForfeit={() => send("forfeit")} />
+        </div>
+      )}
       {state.phase === "finished" && (
         <button className="primary" onClick={() => navigate("/")}>
           New game
@@ -84,8 +93,14 @@ function Status({ state }: { state: GameState }) {
   let text: string;
   let tone = "";
   if (state.phase === "finished") {
-    const reveal = ` Their word was ${state.opponentSecret?.toUpperCase()}.`;
-    if (state.winner === 2) {
+    const reveal = state.opponentSecret ? ` Their word was ${state.opponentSecret.toUpperCase()}.` : "";
+    if (state.forfeitedBy === me) {
+      text = "You forfeited." + reveal;
+      tone = "lose";
+    } else if (state.forfeitedBy === 1 - me) {
+      text = `${opponent.name} forfeited. You win!` + reveal;
+      tone = "win";
+    } else if (state.winner === 2) {
       text = "Draw! You both cracked it." + reveal;
     } else if (state.winner === me) {
       text = "You win!" + reveal;
@@ -107,10 +122,15 @@ function Status({ state }: { state: GameState }) {
   return <p className={`status ${tone}`}>{text}</p>;
 }
 
-function GuessList({ guesses, length }: { guesses: Guess[]; length: number }) {
+function GuessList({ guesses, length, positional }: { guesses: Guess[]; length: number; positional: boolean }) {
   if (guesses.length === 0) return <p className="muted small">No guesses yet.</p>;
   return (
     <ol className="guesses">
+      {positional && (
+        <li className="legend muted small">
+          <span className="badge">#</span> letters <span className="badge exact">#</span> in place
+        </li>
+      )}
       {guesses.map((g, i) => (
         <li key={i}>
           <Tiles guess={g} length={length} />
@@ -139,9 +159,15 @@ function Score({ guess }: { guess: Guess }) {
   if (r.solved) return <span className="score solved">✓</span>;
   if (r.marks) return null; // tiles already say everything
   return (
-    <span className="score" title="letters in common">
-      {r.common}
-      {r.exact !== undefined && <small> · {r.exact} in place</small>}
+    <span className="score">
+      <span className="badge" title={`${r.common} letters in common`}>
+        {r.common}
+      </span>
+      {r.exact !== undefined && (
+        <span className="badge exact" title={`${r.exact} in the right spot`}>
+          {r.exact}
+        </span>
+      )}
     </span>
   );
 }

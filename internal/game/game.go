@@ -85,8 +85,10 @@ type Game struct {
 	// SolvedBy[seat] is set when that seat has guessed the other's word.
 	SolvedBy [2]bool
 	Winner   int // seat, Draw, or NoWinner
-	Created  time.Time
-	Updated  time.Time
+	// ForfeitedBy is the seat that gave up, or NoWinner if nobody did.
+	ForfeitedBy int
+	Created     time.Time
+	Updated     time.Time
 }
 
 // Errors returned for rule violations; the server shows these to players.
@@ -95,20 +97,23 @@ var (
 	ErrWrongPhase  = errors.New("that can't be done right now")
 	ErrNotAWord    = errors.New("not in the dictionary")
 	ErrGameFull    = errors.New("game is full")
+	// Repeating a guess reveals nothing new, so it would only waste a turn.
+	ErrAlreadyGuessed = errors.New("you already guessed that word")
 )
 
 // New creates a game with the creator in seat 0. first picks who opens.
 func New(code string, s Settings, creator *Player, first int, now time.Time) *Game {
 	return &Game{
-		Code:     code,
-		Settings: s,
-		Players:  [2]*Player{creator, nil},
-		Phase:    Waiting,
-		First:    first,
-		Turn:     first,
-		Winner:   NoWinner,
-		Created:  now,
-		Updated:  now,
+		Code:        code,
+		Settings:    s,
+		Players:     [2]*Player{creator, nil},
+		Phase:       Waiting,
+		First:       first,
+		Turn:        first,
+		Winner:      NoWinner,
+		ForfeitedBy: NoWinner,
+		Created:     now,
+		Updated:     now,
 	}
 }
 
@@ -188,6 +193,11 @@ func (g *Game) MakeGuess(seat int, word string, dict Dictionary, now time.Time) 
 	if !dict.IsWord(word) {
 		return Guess{}, ErrNotAWord
 	}
+	for _, prev := range g.Guesses {
+		if prev.Seat == seat && prev.Word == word {
+			return Guess{}, ErrAlreadyGuessed
+		}
+	}
 
 	opp := 1 - seat
 	gs := Guess{Seat: seat, Word: word, Result: Score(word, g.Players[opp].Secret, g.Settings.Feedback), At: now}
@@ -210,6 +220,19 @@ func (g *Game) MakeGuess(seat int, word string, dict Dictionary, now time.Time) 
 		g.Turn = opp
 	}
 	return gs, nil
+}
+
+// Forfeit ends the game with seat's opponent as the winner. It's allowed
+// once both players are in, including while secrets are being chosen.
+func (g *Game) Forfeit(seat int, now time.Time) error {
+	if g.Phase != Choosing && g.Phase != Playing {
+		return ErrWrongPhase
+	}
+	g.Phase = Finished
+	g.Winner = 1 - seat
+	g.ForfeitedBy = seat
+	g.Updated = now
+	return nil
 }
 
 // LastChance reports whether the current turn is the tie-or-lose guess.

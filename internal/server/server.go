@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -144,7 +146,7 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 		var ue hub.UserError
 		switch {
 		case errors.As(err, &ue):
-			s.sendError(ctx, client, ue.Error())
+			s.sendError(ctx, client, userMessage(ue))
 		case err != nil:
 			s.log.Error("handle message", "type", m.Type, "err", err)
 			s.sendError(ctx, client, "something went wrong, try again")
@@ -226,7 +228,7 @@ func (s *Server) writeErr(w http.ResponseWriter, err error) {
 		if errors.Is(err, game.ErrGameFull) {
 			status = http.StatusConflict
 		}
-		writeJSON(w, status, map[string]string{"error": ue.Error()})
+		writeJSON(w, status, map[string]string{"error": userMessage(ue)})
 	case errors.Is(err, store.ErrNotFound):
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "game not found"})
 	default:
@@ -258,6 +260,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+// userMessage turns a Go-style error ("not in the dictionary") into a
+// sentence for players ("Not in the dictionary").
+func userMessage(err error) string {
+	msg := err.Error()
+	r, size := utf8.DecodeRuneInString(msg)
+	return string(unicode.ToUpper(r)) + msg[size:]
 }
 
 func normCode(c string) string { return strings.ToUpper(strings.TrimSpace(c)) }

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { GameState } from "../api";
+import { ForfeitButton } from "./ForfeitButton";
 import { SettingsSummary } from "./SettingsSummary";
 
 interface Props {
   state: GameState;
   error: string | null;
-  send: (type: "secret", word: string) => void;
+  send: (type: "secret" | "forfeit", word?: string) => void;
 }
 
 export function SecretPicker({ state, error, send }: Props) {
@@ -20,6 +21,7 @@ export function SecretPicker({ state, error, send }: Props) {
           Your secret word is <strong className="secret">{state.yourSecret.toUpperCase()}</strong>
         </p>
         <p className="muted">Waiting for {opponent.name} to choose theirs…</p>
+        <ForfeitButton onForfeit={() => send("forfeit")} />
       </section>
     );
   }
@@ -54,7 +56,10 @@ export function SecretPicker({ state, error, send }: Props) {
           Pick for me
         </button>
       </div>
-      <p className="muted small">{opponent.ready ? `${opponent.name} is ready.` : `${opponent.name} is choosing…`}</p>
+      <div className="row spread">
+        <p className="muted small">{opponent.ready ? `${opponent.name} is ready.` : `${opponent.name} is choosing…`}</p>
+        <ForfeitButton onForfeit={() => send("forfeit")} />
+      </div>
     </form>
   );
 }

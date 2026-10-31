@@ -7,6 +7,9 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    // IPv4 so both localhost and 127.0.0.1 reach it: two origins means two
+    // separate players when testing in one browser.
+    host: "127.0.0.1",
     proxy: {
       "/api": { target: "http://localhost:8080", ws: true },
     },

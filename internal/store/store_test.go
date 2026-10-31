@@ -54,3 +54,38 @@ func TestRoundTrip(t *testing.T) {
 		t.Error("game still exists after delete")
 	}
 }
+
+// A database created before migrations were versioned (user_version 0, but
+// with the original tables) must upgrade without losing data.
+func TestMigrateLegacyDatabase(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "legacy.db")
+	s, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := game.New("OLD1", game.DefaultSettings(), &game.Player{Token: "t"}, 0, time.UnixMilli(1))
+	if err := s.Save(ctx, g); err != nil {
+		t.Fatal(err)
+	}
+	// Roll the file back to the pre-versioning shape.
+	for _, q := range []string{`ALTER TABLE games DROP COLUMN forfeited_by`, `PRAGMA user_version = 0`} {
+		if _, err := s.db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+
+	s, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	got, err := s.Load(ctx, "OLD1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ForfeitedBy != game.NoWinner {
+		t.Errorf("ForfeitedBy = %d after migration, want %d", got.ForfeitedBy, game.NoWinner)
+	}
+}

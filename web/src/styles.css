@@ -323,11 +323,6 @@ button.primary {
   font-size: 1.2rem;
   min-width: 2ch;
 }
-.score small {
-  font-weight: 500;
-  font-size: 0.85rem;
-  color: var(--muted);
-}
 .score.solved {
   color: var(--hit);
 }
@@ -357,5 +352,62 @@ button.primary {
 }
 .key.in {
   background: var(--hit);
+  color: #fff;
+}
+
+.row.spread {
+  justify-content: space-between;
+}
+.row.end {
+  justify-content: flex-end;
+}
+
+/* Score badges: letters in common, plus (in positional mode) letters in place. */
+.score {
+  display: inline-flex;
+  gap: 6px;
+}
+.badge {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.badge.exact {
+  background: var(--hit);
+  border-color: var(--hit);
+  color: #fff;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend .badge {
+  min-width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+}
+.legend .badge.exact {
+  margin-left: 8px;
+}
+
+.forfeit {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.9rem;
+  min-height: 36px;
+  padding: 6px 12px;
+}
+.forfeit.armed {
+  background: var(--danger);
+  border-color: var(--danger);
   color: #fff;
 }

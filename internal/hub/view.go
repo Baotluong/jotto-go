@@ -15,7 +15,8 @@ type View struct {
 	YourSecret     string        `json:"yourSecret"`
 	OpponentSecret string        `json:"opponentSecret,omitempty"`
 	Guesses        []game.Guess  `json:"guesses"`
-	Winner         int           `json:"winner"` // seat, 2 = draw, -1 = none
+	Winner         int           `json:"winner"`      // seat, 2 = draw, -1 = none
+	ForfeitedBy    int           `json:"forfeitedBy"` // seat, -1 = none
 }
 
 type PlayerView struct {
@@ -28,15 +29,16 @@ type PlayerView struct {
 func (r *room) viewFor(seat int) View {
 	g := r.g
 	v := View{
-		Code:       g.Code,
-		Settings:   g.Settings,
-		Phase:      g.Phase,
-		You:        seat,
-		Turn:       g.Turn,
-		LastChance: g.LastChance(),
-		YourSecret: g.Players[seat].Secret,
-		Guesses:    g.Guesses,
-		Winner:     g.Winner,
+		Code:        g.Code,
+		Settings:    g.Settings,
+		Phase:       g.Phase,
+		You:         seat,
+		Turn:        g.Turn,
+		LastChance:  g.LastChance(),
+		YourSecret:  g.Players[seat].Secret,
+		Guesses:     g.Guesses,
+		Winner:      g.Winner,
+		ForfeitedBy: g.ForfeitedBy,
 	}
 	if v.Guesses == nil {
 		v.Guesses = []game.Guess{}

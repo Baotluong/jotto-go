@@ -54,6 +54,7 @@ export interface GameState {
   opponentSecret?: string;
   guesses: Guess[];
   winner: number; // seat, 2 = draw, -1 = none
+  forfeitedBy: number; // seat, -1 = none
 }
 
 export interface Joined {
