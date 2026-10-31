@@ -1,0 +1,31 @@
+# Fly.io config. One always-on machine: game rooms live in memory, and SQLite
+# lives on the attached volume. Set `app` to your own app name.
+app = "jotto-go"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  DB_PATH = "/data/jotto.db"
+
+[mounts]
+  source = "jotto_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine up so live WebSockets aren't cut and games stay in memory.
+  auto_stop_machines = "off"
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
