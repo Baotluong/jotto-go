@@ -11,16 +11,16 @@ import (
 // fakeDict accepts a fixed set of words so tests don't depend on the bank.
 type fakeDict struct{ next string }
 
+// Tiers as in the real bank: 1-3 secret, 0 guess-only, -1 guessable proper
+// noun, -2 proper noun that isn't a word.
 var dictWords = map[string]words.Difficulty{
 	"crane": 1, "slate": 1, "house": 1, "mouse": 1, "plant": 2, "quirk": 3,
-	"apple": 1, "sheep": 0,
+	"apple": 1, "sheep": 0, "cakes": 0, "april": -1, "dakar": -2,
 }
 
-func (fakeDict) IsWord(w string) bool { _, ok := dictWords[w]; return ok }
-func (fakeDict) SecretAllowed(w string, d words.Difficulty) bool {
-	t, ok := dictWords[w]
-	return ok && t > 0 && t <= d
-}
+func (fakeDict) IsWord(w string) bool                                       { t, ok := dictWords[w]; return ok && t >= -1 }
+func (fakeDict) IsProperNoun(w string) bool                                 { return dictWords[w] < 0 }
+func (fakeDict) SecretTier(w string) words.Difficulty                       { return max(dictWords[w], 0) }
 func (f fakeDict) RandomSecret(int, words.Difficulty, bool) (string, error) { return f.next, nil }
 
 var now = time.Unix(0, 0)
@@ -61,9 +61,21 @@ func TestSecretValidation(t *testing.T) {
 		t.Errorf("secret before join: %v", err)
 	}
 	g.Join(&Player{}, d, now)
-	for _, w := range []string{"cran", "CRANE", "zzzzz", "apple", "quirk"} {
-		if err := g.SetSecret(0, w, d, now); err == nil {
+	for w, want := range map[string]string{
+		"cran":  "word must be 5 letters",
+		"CRANE": "word must be 5 letters", // wrong case fails the letter check
+		"zzzzz": "not in the dictionary",
+		"apple": "secret can't repeat a letter in this game",
+		"quirk": "QUIRK is too rare for Medium difficulty. Try a more common word",
+		"cakes": "CAKES can't be a secret word. Plurals, past tenses, and rare words aren't allowed",
+		"april": "APRIL is a proper noun, so it can't be a secret word",
+		"dakar": "DAKAR is a proper noun, so it can't be a secret word",
+	} {
+		err := g.SetSecret(0, w, d, now)
+		if err == nil {
 			t.Errorf("secret %q accepted", w)
+		} else if w != "CRANE" && err.Error() != want {
+			t.Errorf("secret %q: got %q, want %q", w, err, want)
 		}
 	}
 	if err := g.SetSecret(0, "plant", d, now); err != nil {
@@ -90,6 +102,9 @@ func TestTurnOrder(t *testing.T) {
 	}
 	if _, err := g.MakeGuess(0, "zzzzz", fakeDict{}, now); !errors.Is(err, ErrNotAWord) {
 		t.Errorf("non-word: %v", err)
+	}
+	if _, err := g.MakeGuess(0, "dakar", fakeDict{}, now); err == nil || err.Error() != "DAKAR is a proper noun. Names of people and places aren't allowed" {
+		t.Errorf("proper-name guess: %v", err)
 	}
 	// Guesses don't need to obey the unique-letters rule.
 	gs := mustGuess(t, g, 0, "sheep")

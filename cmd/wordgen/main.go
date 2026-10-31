@@ -6,7 +6,9 @@
 //
 // Output: one file per word length, internal/words/data/words-<n>.txt, each
 // line "word<TAB>tier" where tier 1-3 means the word may be a secret at that
-// difficulty, and 0 means it is accepted as a guess only.
+// difficulty, 0 means it is accepted as a guess only, -1 is a common proper
+// noun accepted as a guess ("april"), and -2 is a proper noun that isn't
+// accepted at all ("dakar") but is listed so players can be told why.
 //
 // Usage: go run ./cmd/wordgen -scowl <dir>/final -blocklist <file> -out internal/words/data
 package main
@@ -33,6 +35,20 @@ var tierLevels = map[int][]int{
 
 // guessLevels are the levels accepted as valid guesses, beyond the tiers.
 var guessLevels = []int{55, 60, 70, 80}
+
+// capitalLevels are the levels of SCOWL's always-capitalized words accepted
+// as guesses (never secrets). Up to 40 these are common words like months,
+// days, and nationalities; from 50 on they're mostly people and places.
+var capitalLevels = []int{10, 35, 40}
+
+// allLevels are every SCOWL level, for collecting the full set of proper nouns.
+var allLevels = []int{10, 20, 35, 40, 50, 55, 60, 70, 80, 95}
+
+// Tier values for proper nouns. Keep in sync with internal/words.
+const (
+	tierCommonProper = -1 // "april": a valid guess, never a secret
+	tierProperName   = -2 // "dakar": rejected, but recognized for a clear message
+)
 
 var lengths = []int{4, 5, 6}
 
@@ -72,15 +88,36 @@ func main() {
 		}
 	}
 
-	for w := range tier {
-		if blocked[w] {
-			delete(tier, w)
-		}
-	}
 	// Plurals and past tenses ("cats", "baked") make poor secrets: demote them.
+	// This runs before proper nouns are added so "Marys" can't demote "marys".
 	for w, t := range tier {
 		if t > 0 && isInflection(w, tier) {
 			tier[w] = 0
+		}
+	}
+
+	// Proper nouns are recorded only so players get a clear message. A word
+	// that is also an ordinary lowercase word ("march") keeps its tier.
+	for _, lvl := range capitalLevels {
+		for _, w := range readCapitalized(*scowlDir, "english-upper", lvl) {
+			if _, ok := tier[w]; !ok {
+				tier[w] = tierCommonProper
+			}
+		}
+	}
+	for _, list := range []string{"english-upper", "english-proper-names", "american-upper", "american-proper-names"} {
+		for _, lvl := range allLevels {
+			for _, w := range readCapitalized(*scowlDir, list, lvl) {
+				if _, ok := tier[w]; !ok {
+					tier[w] = tierProperName
+				}
+			}
+		}
+	}
+
+	for w := range tier {
+		if isBlocked(w, blocked, tier) {
+			delete(tier, w)
 		}
 	}
 
@@ -101,7 +138,8 @@ func main() {
 		if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("%d letters: easy=%d medium=%d hard=%d guess-only=%d", n, counts[1], counts[2], counts[3], counts[0])
+		log.Printf("%d letters: easy=%d medium=%d hard=%d guess-only=%d proper-guessable=%d proper-rejected=%d",
+			n, counts[1], counts[2], counts[3], counts[0], counts[tierCommonProper], counts[tierProperName])
 	}
 }
 
@@ -137,6 +175,50 @@ func readLevel(dir string, level int, includeBritish bool) []string {
 		}
 	}
 	return out
+}
+
+// readCapitalized returns the 4-6 letter words at one level of a SCOWL list
+// of capitalized words ("upper" = words like "April", "proper-names" = people
+// and places), lowercased. Acronyms and mixed case ("McCoy") are skipped.
+func readCapitalized(dir, list string, level int) []string {
+	path := filepath.Join(dir, fmt.Sprintf("%s.%d", list, level))
+	if _, err := os.Stat(path); err != nil {
+		return nil
+	}
+	var out []string
+	for _, line := range mustReadLines(path) {
+		if w := strings.ToLower(line); lowerWord.MatchString(w) && line[1:] == w[1:] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// isBlocked reports whether w is on the blocklist or is an inflection of a
+// blocked word ("sluts" -> "slut"). A word that can also be read as the
+// inflection of an innocent word ("spices" -> "spice") is kept.
+func isBlocked(w string, blocked map[string]bool, known map[string]int) bool {
+	if blocked[w] {
+		return true
+	}
+	var stems []string
+	for _, suffix := range []string{"s", "es", "ed", "d"} {
+		if strings.HasSuffix(w, suffix) {
+			stems = append(stems, strings.TrimSuffix(w, suffix))
+		}
+	}
+	if strings.HasSuffix(w, "ies") {
+		stems = append(stems, strings.TrimSuffix(w, "ies")+"y")
+	}
+	hit := false
+	for _, stem := range stems {
+		if blocked[stem] {
+			hit = true
+		} else if _, ok := known[stem]; ok {
+			return false
+		}
+	}
+	return hit
 }
 
 // isInflection reports whether w looks like a plural or past tense of another

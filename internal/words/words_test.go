@@ -33,6 +33,27 @@ func TestBank(t *testing.T) {
 	if b.SecretAllowed("houses", Hard) {
 		t.Error("plurals should not be secrets")
 	}
+	// Common capitalized words are fine to guess but never secrets;
+	// names of people and places aren't words at all.
+	if !b.IsWord("april") || b.SecretAllowed("april", Hard) {
+		t.Error("april should be guess-only")
+	}
+	if b.IsWord("dakar") || !b.IsProperNoun("dakar") {
+		t.Error("dakar should be a recognized proper noun, not a word")
+	}
+	if b.IsProperNoun("march") || !b.IsWord("march") {
+		t.Error("march is also an ordinary word")
+	}
+	for _, w := range []string{"sluts", "whores"} {
+		if b.IsWord(w) {
+			t.Errorf("%q: inflections of blocked words should be removed", w)
+		}
+	}
+	for _, w := range []string{"spices", "pike", "bust"} {
+		if !b.IsWord(w) {
+			t.Errorf("%q: innocent word was over-blocked", w)
+		}
+	}
 	for d := Easy; d <= Hard; d++ {
 		w, err := b.RandomSecret(5, d, true)
 		if err != nil {

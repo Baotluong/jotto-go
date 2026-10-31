@@ -5,6 +5,7 @@ package game
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Baotluong/jotto-go/internal/words"
@@ -69,7 +70,9 @@ type Guess struct {
 // Dictionary is what the rules need from the word bank.
 type Dictionary interface {
 	IsWord(w string) bool
-	SecretAllowed(w string, d words.Difficulty) bool
+	IsProperNoun(w string) bool
+	// SecretTier is the easiest difficulty w is a secret at, or 0 if never.
+	SecretTier(w string) words.Difficulty
 	RandomSecret(length int, d words.Difficulty, unique bool) (string, error)
 }
 
@@ -161,11 +164,11 @@ func (g *Game) SetSecret(seat int, word string, dict Dictionary, now time.Time) 
 		if err := checkShape(word, s.Length); err != nil {
 			return err
 		}
+		if err := checkSecret(word, s.Difficulty, dict); err != nil {
+			return err
+		}
 		if s.UniqueLetters && !words.HasUniqueLetters(word) {
 			return errors.New("secret can't repeat a letter in this game")
-		}
-		if !dict.SecretAllowed(word, s.Difficulty) {
-			return errors.New("pick a more common word for this difficulty")
 		}
 	}
 	g.Players[seat].Secret = word
@@ -191,6 +194,9 @@ func (g *Game) MakeGuess(seat int, word string, dict Dictionary, now time.Time) 
 		return Guess{}, err
 	}
 	if !dict.IsWord(word) {
+		if dict.IsProperNoun(word) {
+			return Guess{}, fmt.Errorf("%s is a proper noun. Names of people and places aren't allowed", strings.ToUpper(word))
+		}
 		return Guess{}, ErrNotAWord
 	}
 	for _, prev := range g.Guesses {
@@ -251,6 +257,24 @@ func (g *Game) finish(now time.Time) {
 	default:
 		g.Winner = 1
 	}
+}
+
+// checkSecret explains why a typed word can't be a secret, so players
+// aren't left guessing at a generic rejection.
+func checkSecret(word string, d words.Difficulty, dict Dictionary) error {
+	shown := strings.ToUpper(word)
+	tier := dict.SecretTier(word)
+	switch {
+	case dict.IsProperNoun(word):
+		return fmt.Errorf("%s is a proper noun, so it can't be a secret word", shown)
+	case !dict.IsWord(word):
+		return ErrNotAWord
+	case tier == 0:
+		return fmt.Errorf("%s can't be a secret word. Plurals, past tenses, and rare words aren't allowed", shown)
+	case tier > d:
+		return fmt.Errorf("%s is too rare for %s difficulty. Try a more common word", shown, d)
+	}
+	return nil
 }
 
 func checkShape(word string, length int) error {

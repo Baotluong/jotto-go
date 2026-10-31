@@ -50,9 +50,11 @@ This version adds real-time online multiplayer with a Go backend.
 - **`internal/words`** — word banks generated from [SCOWL](http://wordlist.aspell.net/)
   and embedded in the binary. SCOWL's size levels map to difficulty tiers
   (easy = levels 10–20, medium = 35, hard = 40–50). Guesses are checked
-  against a wider dictionary (up to level 80). Plurals, past tenses and
-  offensive words are excluded from secrets. Regenerate with
-  `scripts/build-words.sh`.
+  against a wider dictionary (up to level 80). Plurals and past tenses
+  can be guessed but aren't secrets. Common capitalized words (months,
+  days, nationalities) can be guessed but never secrets; names of people
+  and places are rejected with an explanation. Offensive words and their
+  inflections are removed entirely. Regenerate with `scripts/build-words.sh`.
 - **`internal/hub`** — loaded games ("rooms") keyed by code, each behind its
   own mutex. Rooms are reference-counted by connected clients and in-flight
   requests, and dropped from memory when the count reaches zero.
