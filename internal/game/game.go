@@ -18,6 +18,9 @@ type Settings struct {
 	Difficulty    words.Difficulty `json:"difficulty"`
 	Feedback      Feedback         `json:"feedback"`
 	AutoSecrets   bool             `json:"autoSecrets"` // server picks both secrets
+	// Solo is one player against a random word: seat 1 is the house, which
+	// holds the secret but never joins or guesses.
+	Solo bool `json:"solo,omitempty"`
 }
 
 // DefaultSettings is classic Jotto.
@@ -120,6 +123,21 @@ func New(code string, s Settings, creator *Player, first int, now time.Time) *Ga
 	}
 }
 
+// NewSolo creates a solo game that starts immediately: p is in seat 0 and
+// guesses a secret drawn for the house in seat 1. The house has no token, so
+// nobody can connect as it.
+func NewSolo(code string, s Settings, p *Player, dict Dictionary, now time.Time) (*Game, error) {
+	secret, err := dict.RandomSecret(s.Length, s.Difficulty, s.UniqueLetters)
+	if err != nil {
+		return nil, err
+	}
+	s.Solo, s.AutoSecrets = true, true
+	g := New(code, s, p, 0, now)
+	g.Players[1] = &Player{Secret: secret}
+	g.Phase = Playing
+	return g, nil
+}
+
 // Join seats the second player. With AutoSecrets on, both secrets are
 // drawn and play starts immediately.
 func (g *Game) Join(p *Player, dict Dictionary, now time.Time) error {
@@ -214,6 +232,11 @@ func (g *Game) MakeGuess(seat int, word string, dict Dictionary, now time.Time) 
 	}
 
 	switch {
+	case g.Settings.Solo:
+		// No opponent: keep guessing until solved.
+		if gs.Result.Solved {
+			g.finish(now)
+		}
 	case seat == g.First && gs.Result.Solved:
 		// Opponent gets a last-chance turn.
 		g.Turn = opp

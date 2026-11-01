@@ -66,9 +66,12 @@ func run(log *slog.Logger) error {
 	if o := os.Getenv("ALLOWED_ORIGINS"); o != "" {
 		origins = strings.Split(o, ",")
 	}
+	// Fly sets FLY_APP_NAME on its machines, where all traffic comes through
+	// its proxy and the client IP is in the Fly-Client-IP header.
+	onFly := os.Getenv("FLY_APP_NAME") != ""
 	srv := &http.Server{
 		Addr:              ":" + env("PORT", "8080"),
-		Handler:           server.New(h, db, log, web.Dist(), origins),
+		Handler:           server.New(h, db, log, web.Dist(), origins, onFly),
 		ReadHeaderTimeout: 10 * time.Second,
 		// Request contexts end on shutdown, which closes open WebSockets.
 		BaseContext: func(_ net.Listener) context.Context { return ctx },

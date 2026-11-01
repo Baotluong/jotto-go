@@ -1,10 +1,16 @@
 # Jotto
 
+[![CI](https://github.com/Baotluong/jotto-go/actions/workflows/ci.yml/badge.svg)](https://github.com/Baotluong/jotto-go/actions/workflows/ci.yml)
+
+**Play it: [jottogo.fly.dev](https://jottogo.fly.dev)**
+
 Online two-player Jotto: each player picks a secret word, then you take turns
 guessing each other's. Every guess tells you how many letters it shares with
 your opponent's word — not which ones. First to crack it wins.
 
 No accounts. Create a game, send the four-letter code to a friend, play.
+Or play solo: crack a random word at your chosen difficulty in as few
+guesses as you can.
 
 This is the latest in a line of rewrites:
 [2016](https://github.com/Baotluong/Jotto),
@@ -80,6 +86,12 @@ This version adds real-time online multiplayer with a Go backend.
   never includes the opponent's secret until the game is over.
 - **Server-authoritative.** Scoring and validation happen only on the server,
   so a modified client can't peek or cheat.
+- **Abuse limits.** Per-IP token buckets cap game creation and joins
+  (a burst of 10, then one every 6 seconds) and WebSocket connects, with at
+  most 20 open sockets per IP and 2 messages a second per socket. On Fly
+  the client IP comes from `Fly-Client-IP`, which only Fly's proxy can set.
+  Requests and WebSocket messages are capped at 4 KB. Hosting is a fixed
+  single machine, so a flood can degrade the game but can't grow the bill.
 - **One instance, on purpose.** All players of a game must reach the same
   process. A single small machine handles that with no Redis or pub/sub,
   and SQLite on a volume costs nothing extra. Scaling out would mean routing
@@ -111,6 +123,8 @@ on `127.0.0.1`. They're different origins, so each gets its own token.
 
 ## Deploying to Fly.io
 
+The live app runs as `jottogo` in `iad`. To deploy your own copy:
+
 ```bash
 fly launch --no-deploy          # pick an app name; keep the existing fly.toml
 fly volumes create jotto_data --size 1
@@ -118,8 +132,8 @@ fly deploy
 ```
 
 One `shared-cpu-1x` machine with 256 MB plus a 1 GB volume runs a few dollars
-a month. CI deploys on every push to `main` once a `FLY_API_TOKEN` repo secret
-exists (`fly tokens create deploy`).
+a month. CI deploys on every push to `main`, after tests pass, once a
+`FLY_API_TOKEN` repo secret exists (`fly tokens create deploy`).
 
 ## Mobile
 

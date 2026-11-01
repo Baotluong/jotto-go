@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { navigate } from "../App";
-import type { GameState, Guess } from "../api";
+import { createGame, loadName, saveToken, type Feedback, type GameState, type Guess } from "../api";
 import { ForfeitButton } from "./ForfeitButton";
 import { LetterBoard } from "./LetterBoard";
 
@@ -17,8 +17,22 @@ export function Board({ state, error, send }: Props) {
   const opponent = state.players[them];
   const myTurn = state.phase === "playing" && state.turn === me;
   const n = state.settings.length;
+  const solo = !!state.settings.solo;
   const mine = state.guesses.filter((g) => g.seat === me);
   const theirs = state.guesses.filter((g) => g.seat === them);
+
+  const [againError, setAgainError] = useState<string | null>(null);
+
+  // Same settings, fresh word.
+  async function playAgain() {
+    try {
+      const j = await createGame(loadName(), state.settings);
+      saveToken(j);
+      navigate(`/g/${j.code}`);
+    } catch (err) {
+      setAgainError((err as Error).message);
+    }
+  }
 
   // Clear the input only once a guess is accepted, so a rejected one
   // (typo, repeat) can be fixed instead of retyped.
@@ -54,35 +68,53 @@ export function Board({ state, error, send }: Props) {
       )}
       {error && <p className="error">{error}</p>}
 
-      <div className="columns">
-        <section className="card">
+      {/* Footers sit at the bottom of equal-height cards, so the guess
+          lists start level and the footers line up too. */}
+      <div className={solo ? "stack" : "columns"}>
+        <section className="card guess-card">
           <h3>Your guesses</h3>
           <GuessList guesses={mine} length={n} />
+          <Legend feedback={state.settings.feedback} />
         </section>
-        <section className="card">
-          <h3>
-            {opponent.name}'s guesses
-            {!opponent.connected && <span className="muted small"> (offline)</span>}
-          </h3>
-          <GuessList guesses={theirs} length={n} />
-          <p className="muted small">
-            Your word: <strong className="secret">{state.yourSecret.toUpperCase()}</strong>
-          </p>
-        </section>
+        {!solo && (
+          <section className="card guess-card">
+            <h3>
+              {opponent.name}'s guesses
+              {!opponent.connected && <span className="muted small"> (offline)</span>}
+            </h3>
+            <GuessList guesses={theirs} length={n} />
+            <p className="card-foot muted small">
+              Your word: <strong className="secret">{state.yourSecret.toUpperCase()}</strong>
+            </p>
+          </section>
+        )}
       </div>
 
       <LetterBoard code={state.code} />
 
       {state.phase === "playing" && (
         <div className="row end">
-          <ForfeitButton onForfeit={() => send("forfeit")} />
+          <ForfeitButton onForfeit={() => send("forfeit")} label={solo ? "Give up" : "Forfeit"} />
         </div>
       )}
-      {state.phase === "finished" && (
-        <button className="primary" onClick={() => navigate("/")}>
-          New game
-        </button>
-      )}
+      {state.phase === "finished" &&
+        (solo ? (
+          <>
+            {againError && <p className="error">{againError}</p>}
+            <div className="row">
+              <button className="primary grow" onClick={playAgain}>
+                Play again
+              </button>
+              <button className="grow" onClick={() => navigate("/")}>
+                Home
+              </button>
+            </div>
+          </>
+        ) : (
+          <button className="primary" onClick={() => navigate("/")}>
+            New game
+          </button>
+        ))}
     </div>
   );
 }
@@ -92,7 +124,20 @@ function Status({ state }: { state: GameState }) {
   const opponent = state.players[1 - me];
   let text: string;
   let tone = "";
-  if (state.phase === "finished") {
+  if (state.settings.solo) {
+    const count = state.guesses.length;
+    const word = state.opponentSecret?.toUpperCase();
+    if (state.phase !== "finished") {
+      text = count === 0 ? "Guess the secret word" : `Guess ${count + 1}`;
+      tone = "active";
+    } else if (state.winner === me) {
+      text = `Solved in ${count} ${count === 1 ? "guess" : "guesses"}! The word was ${word}.`;
+      tone = "win";
+    } else {
+      text = `The word was ${word}.`;
+      tone = "lose";
+    }
+  } else if (state.phase === "finished") {
     const reveal = state.opponentSecret ? ` Their word was ${state.opponentSecret.toUpperCase()}.` : "";
     if (state.forfeitedBy === me) {
       text = "You forfeited." + reveal;
@@ -120,6 +165,22 @@ function Status({ state }: { state: GameState }) {
     tone = state.turn === me ? "active" : "";
   }
   return <p className={`status ${tone}`}>{text}</p>;
+}
+
+function Legend({ feedback }: { feedback: Feedback }) {
+  if (feedback === "classic") {
+    return <p className="card-foot muted small">The number is how many letters a guess shares with the secret word.</p>;
+  }
+  return (
+    <p className="card-foot legend muted small">
+      <span>
+        <i className="swatch hit" /> Right spot
+      </span>
+      <span>
+        <i className="swatch present" /> Right letter
+      </span>
+    </p>
+  );
 }
 
 function GuessList({ guesses, length }: { guesses: Guess[]; length: number }) {

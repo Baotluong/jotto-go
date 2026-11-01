@@ -36,7 +36,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 	}
 	log := slog.New(slog.DiscardHandler)
 	static := fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}}
-	ts := httptest.NewServer(New(hub.New(db, dict, nil, log), db, log, static, nil))
+	ts := httptest.NewServer(New(hub.New(db, dict, nil, log), db, log, static, nil, false))
 	t.Cleanup(ts.Close)
 	return ts
 }
@@ -199,5 +199,55 @@ func TestForfeitAndErrorText(t *testing.T) {
 	s := pb.waitFor(func(m serverMsg) bool { return m.State.Phase == game.Finished }).State
 	if s.Winner != 1 || s.ForfeitedBy != 0 {
 		t.Errorf("winner %d forfeitedBy %d", s.Winner, s.ForfeitedBy)
+	}
+}
+
+func TestSolo(t *testing.T) {
+	ts := newTestServer(t)
+	settings := game.DefaultSettings()
+	settings.Solo = true
+	status, a := postJSON(t, ts.URL+"/api/games", map[string]any{"settings": settings})
+	if status != http.StatusCreated {
+		t.Fatalf("create solo: %d", status)
+	}
+	p := connect(t, ts, a)
+	s := p.waitFor(func(m serverMsg) bool { return m.State.Phase == game.Playing }).State
+	if s.OpponentSecret != "" || s.Turn != 0 {
+		t.Fatalf("solo start: %+v", s)
+	}
+
+	// Nobody can connect as the house, whose token is empty.
+	house := connect(t, ts, hub.Joined{Code: a.Code, Token: ""})
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if _, _, err := house.conn.Read(ctx); websocket.CloseStatus(err) != 4401 {
+		t.Errorf("house connect: %v", err)
+	}
+
+	p.send("guess", "crane")
+	p.waitFor(func(m serverMsg) bool { return len(m.State.Guesses) == 1 })
+	p.send("forfeit", "")
+	s = p.waitFor(func(m serverMsg) bool { return m.State.Phase == game.Finished }).State
+	if s.OpponentSecret == "" {
+		t.Error("secret not revealed after giving up")
+	}
+}
+
+func TestCreateRateLimit(t *testing.T) {
+	ts := newTestServer(t)
+	for i := range gameBurst {
+		if status, _ := postJSON(t, ts.URL+"/api/games", map[string]any{}); status != http.StatusCreated {
+			t.Fatalf("create %d: %d", i, status)
+		}
+	}
+	resp, err := http.Post(ts.URL+"/api/games", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var body struct{ Error string }
+	json.NewDecoder(resp.Body).Decode(&body)
+	if resp.StatusCode != http.StatusTooManyRequests || body.Error == "" {
+		t.Errorf("past burst: %d %q", resp.StatusCode, body.Error)
 	}
 }

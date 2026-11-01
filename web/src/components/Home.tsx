@@ -49,10 +49,24 @@ export function Home() {
 
       <form className="card stack" onSubmit={onCreate}>
         <h2>New game</h2>
-        <label className="field">
-          <span>Your name</span>
-          <input value={name} maxLength={20} placeholder="Player 1" onChange={(e) => setName(e.target.value)} />
-        </label>
+        <fieldset className="field">
+          <legend>Players</legend>
+          <div className="segmented">
+            <button type="button" aria-pressed={!settings.solo} onClick={() => set("solo", false)}>
+              With a friend
+            </button>
+            <button type="button" aria-pressed={!!settings.solo} onClick={() => set("solo", true)}>
+              Solo
+            </button>
+          </div>
+          {settings.solo && <small className="muted">Crack a random secret word in as few guesses as you can.</small>}
+        </fieldset>
+        {!settings.solo && (
+          <label className="field">
+            <span>Your name</span>
+            <input value={name} maxLength={20} placeholder="Player 1" onChange={(e) => setName(e.target.value)} />
+          </label>
+        )}
 
         <fieldset className="field">
           <legend>Word length</legend>
@@ -108,18 +122,20 @@ export function Home() {
           />
           No repeated letters in secret words
         </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={settings.autoSecrets}
-            onChange={(e) => set("autoSecrets", e.target.checked)}
-          />
-          Pick secret words for us
-        </label>
+        {!settings.solo && (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={settings.autoSecrets}
+              onChange={(e) => set("autoSecrets", e.target.checked)}
+            />
+            Pick secret words for us
+          </label>
+        )}
 
         {error && <p className="error">{error}</p>}
         <button className="primary" disabled={busy}>
-          {busy ? "Creating…" : "Create game"}
+          {busy ? "Creating…" : settings.solo ? "Start" : "Create game"}
         </button>
       </form>
 

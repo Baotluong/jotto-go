@@ -186,3 +186,40 @@ func TestForfeit(t *testing.T) {
 		t.Errorf("forfeit after finish: %v", err)
 	}
 }
+
+func TestSolo(t *testing.T) {
+	g, err := NewSolo("ABCD", DefaultSettings(), &Player{Token: "a"}, fakeDict{next: "house"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Phase != Playing || g.Turn != 0 || !g.Settings.Solo {
+		t.Fatalf("phase %s turn %d solo %v", g.Phase, g.Turn, g.Settings.Solo)
+	}
+	if err := g.Join(&Player{Token: "b"}, fakeDict{}, now); !errors.Is(err, ErrGameFull) {
+		t.Errorf("join solo game: %v", err)
+	}
+	// The turn never passes to the house.
+	mustGuess(t, g, 0, "slate")
+	mustGuess(t, g, 0, "crane")
+	if g.Turn != 0 || g.Phase != Playing {
+		t.Errorf("after misses: turn %d phase %s", g.Turn, g.Phase)
+	}
+	// Solving ends it at once, with no last-chance turn.
+	mustGuess(t, g, 0, "house")
+	if g.Phase != Finished || g.Winner != 0 {
+		t.Errorf("after solve: phase %s winner %d", g.Phase, g.Winner)
+	}
+}
+
+func TestSoloForfeit(t *testing.T) {
+	g, err := NewSolo("ABCD", DefaultSettings(), &Player{Token: "a"}, fakeDict{next: "house"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Forfeit(0, now); err != nil {
+		t.Fatal(err)
+	}
+	if g.Phase != Finished || g.ForfeitedBy != 0 {
+		t.Errorf("phase %s forfeitedBy %d", g.Phase, g.ForfeitedBy)
+	}
+}

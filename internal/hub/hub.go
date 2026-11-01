@@ -119,11 +119,22 @@ func (h *Hub) Create(ctx context.Context, s game.Settings, name string) (Joined,
 		return Joined{}, err
 	}
 	token := newToken()
-	g := game.New(code, s, &game.Player{Token: token, Name: cleanName(name, 0)}, mrand.IntN(2), h.now())
+	p := &game.Player{Token: token, Name: cleanName(name, 0)}
+	var g *game.Game
+	if s.Solo {
+		if g, err = game.NewSolo(code, s, p, h.dict, h.now()); err != nil {
+			return Joined{}, err
+		}
+	} else {
+		g = game.New(code, s, p, mrand.IntN(2), h.now())
+	}
 	if err := h.store.Save(ctx, g); err != nil {
 		return Joined{}, err
 	}
 	h.hooks.Send(webhook.Event{Type: "game.created", Code: code})
+	if g.Phase == game.Playing {
+		h.hooks.Send(webhook.Event{Type: "game.started", Code: code})
+	}
 	return Joined{Code: code, Token: token, Seat: 0}, nil
 }
 
@@ -142,6 +153,10 @@ func (h *Hub) Join(ctx context.Context, code, name string) (Joined, error) {
 // Attach registers a WebSocket client for the player holding token and
 // queues the current state for them.
 func (h *Hub) Attach(ctx context.Context, code, token string) (*Client, error) {
+	// The solo house seat has an empty token; it must never match.
+	if token == "" {
+		return nil, ErrBadToken
+	}
 	r, err := h.acquire(ctx, code)
 	if err != nil {
 		return nil, err

@@ -28,16 +28,28 @@ type Server struct {
 	log            *slog.Logger
 	static         fs.FS
 	originPatterns []string
+	trustProxy     bool
+
+	gameLimit    *limiter
+	connectLimit *limiter
+	conns        *connCounter
 }
 
 // New builds the handler. static is the built frontend (may be empty);
 // originPatterns lists extra allowed WebSocket origins, e.g. the Vite dev server.
-func New(h *hub.Hub, s *store.Store, log *slog.Logger, static fs.FS, originPatterns []string) http.Handler {
-	srv := &Server{hub: h, store: s, log: log, static: static, originPatterns: originPatterns}
+// trustProxy means requests arrive through Fly's proxy, so the client IP used
+// for rate limiting comes from the Fly-Client-IP header.
+func New(h *hub.Hub, s *store.Store, log *slog.Logger, static fs.FS, originPatterns []string, trustProxy bool) http.Handler {
+	srv := &Server{
+		hub: h, store: s, log: log, static: static, originPatterns: originPatterns, trustProxy: trustProxy,
+		gameLimit:    newLimiter(gameRate, gameBurst),
+		connectLimit: newLimiter(connectRate, connectBurst),
+		conns:        &connCounter{max: maxConnsPerIP, n: map[string]int{}},
+	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/games", srv.createGame)
-	mux.HandleFunc("POST /api/games/{code}/join", srv.joinGame)
-	mux.HandleFunc("GET /api/games/{code}/ws", srv.websocket)
+	mux.HandleFunc("POST /api/games", srv.limit(srv.gameLimit, srv.createGame))
+	mux.HandleFunc("POST /api/games/{code}/join", srv.limit(srv.gameLimit, srv.joinGame))
+	mux.HandleFunc("GET /api/games/{code}/ws", srv.limit(srv.connectLimit, srv.websocket))
 	mux.HandleFunc("GET /healthz", srv.health)
 	mux.Handle("/", srv.spa())
 	return srv.logRequests(mux)
@@ -99,6 +111,12 @@ const (
 // websocket upgrades the connection. The first client message must be
 // {"token": "..."}; sending the token in-band keeps it out of URLs and logs.
 func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
+	ip := s.clientIP(r)
+	if !s.conns.acquire(ip) {
+		tooMany(w)
+		return
+	}
+	defer s.conns.release(ip)
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: s.originPatterns})
 	if err != nil {
 		return // Accept already wrote the response
@@ -137,10 +155,15 @@ func (s *Server) websocket(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	go s.writeLoop(ctx, cancel, conn, client)
 
+	var msgs bucket
 	for {
 		var m hub.Message
 		if err := wsjson.Read(ctx, conn, &m); err != nil {
 			return
+		}
+		if !msgs.allow(messageRate, messageBurst, time.Now()) {
+			s.sendError(ctx, client, "Slow down")
+			continue
 		}
 		err := s.hub.Handle(ctx, client, m)
 		var ue hub.UserError

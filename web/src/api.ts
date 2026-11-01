@@ -11,6 +11,7 @@ export interface Settings {
   difficulty: Difficulty;
   feedback: Feedback;
   autoSecrets: boolean;
+  solo?: boolean; // one player against a random word
 }
 
 export const defaultSettings: Settings = {

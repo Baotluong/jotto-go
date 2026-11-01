@@ -227,6 +227,10 @@ button.primary {
 .code-input {
   width: 9ch;
 }
+.link-input {
+  width: 100%;
+  text-align: center;
+}
 
 .code,
 .secret {
@@ -316,6 +320,38 @@ button.primary {
   background: var(--miss);
   border-color: var(--miss);
   color: #fff;
+}
+
+.guess-card {
+  display: flex;
+  flex-direction: column;
+}
+/* Pinned to the bottom of the card. */
+.card-foot {
+  margin: auto 0 0;
+  padding-top: 14px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.swatch {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.swatch.hit {
+  background: var(--hit);
+}
+.swatch.present {
+  background: var(--present);
 }
 
 .score {
